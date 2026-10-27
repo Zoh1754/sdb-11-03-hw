@@ -1,0 +1,94 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.23
+    container_name: elasticsearch
+    restart: unless-stopped
+
+    environment:
+      - node.name=es01
+      - cluster.name=sdb-netology-cluster-8417
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+
+    ports:
+      - "9200:9200"
+
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+
+    mem_limit: 900m
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.19.23
+    container_name: kibana
+    restart: unless-stopped
+
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_HOST=0.0.0.0
+      - NODE_OPTIONS=--max-old-space-size=512
+
+    ports:
+      - "5601:5601"
+
+    depends_on:
+      - elasticsearch
+
+    mem_limit: 700m
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx-elk
+    restart: unless-stopped
+
+    ports:
+      - "8080:80"
+
+    volumes:
+      - ./nginx-logs:/var/log/nginx
+
+    mem_limit: 100m
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.19.23
+    container_name: logstash
+    restart: unless-stopped
+
+    environment:
+      - LS_JAVA_OPTS=-Xms256m -Xmx256m
+      - XPACK_MONITORING_ENABLED=false
+
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./nginx-logs:/var/log/nginx:ro
+
+    depends_on:
+      - elasticsearch
+      - nginx
+
+    mem_limit: 500m
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.19.23
+    container_name: filebeat
+    restart: unless-stopped
+    user: root
+
+    command: ["filebeat", "-e", "--strict.perms=false"]
+
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./nginx-logs:/var/log/nginx:ro
+      - filebeat-data:/usr/share/filebeat/data
+
+    depends_on:
+      - elasticsearch
+      - nginx
+
+    mem_limit: 250m
+
+volumes:
+  elasticsearch-data:
+  filebeat-data:
